@@ -1,0 +1,204 @@
+{
+  "name": "ajay-data-pipeline_v1",
+  "description": "Data Streams Application",
+  "artifact": {
+    "name": "cdap-data-streams",
+    "version": "6.0.0",
+    "scope": "SYSTEM"
+  },
+  "config": {
+    "resources": {
+      "memoryMB": 2048,
+      "virtualCores": 1
+    },
+    "driverResources": {
+      "memoryMB": 2048,
+      "virtualCores": 1
+    },
+    "connections": [
+      {
+        "from": "Google Cloud PubSub",
+        "to": "Projection"
+      },
+      {
+        "from": "Projection",
+        "to": "Wrangler"
+      },
+      {
+        "from": "Wrangler",
+        "to": "BigQuery"
+      }
+    ],
+    "comments": [],
+    "postActions": [],
+    "properties": {
+      "system.spark.spark.streaming.backpressure.enabled": "true"
+    },
+    "processTimingEnabled": true,
+    "stageLoggingEnabled": true,
+    "stages": [
+      {
+        "name": "Google Cloud PubSub",
+        "plugin": {
+          "name": "GoogleSubscriber",
+          "type": "streamingsource",
+          "label": "Google Cloud PubSub",
+          "artifact": {
+            "name": "google-cloud",
+            "version": "0.12.2",
+            "scope": "SYSTEM"
+          },
+          "properties": {
+            "project": "q-data-analytics-practice-lab",
+            "serviceFilePath": "auto-detect",
+            "referenceName": "Receive Data",
+            "topic": "json_listener_topic",
+            "subscription": "json_listener_subscription"
+          }
+        },
+        "outputSchema": [
+          {
+            "name": "etlSchemaBody",
+            "schema": "{\"name\":\"etlSchemaBody\",\"type\":\"record\",\"fields\":[{\"name\":\"message\",\"type\":\"bytes\"},{\"name\":\"id\",\"type\":\"string\"},{\"name\":\"timestamp\",\"type\":{\"logicalType\":\"timestamp-micros\",\"type\":\"long\"}},{\"name\":\"attributes\",\"type\":{\"keys\":\"string\",\"values\":\"string\",\"type\":\"map\"}}]}"
+          }
+        ],
+        "type": "streamingsource",
+        "label": "Google Cloud PubSub",
+        "icon": "fa-plug",
+        "$$hashKey": "object:34",
+        "_uiPosition": {
+          "left": "290px",
+          "top": "316px"
+        }
+      },
+      {
+        "name": "Projection",
+        "plugin": {
+          "name": "Projection",
+          "type": "transform",
+          "label": "Projection",
+          "artifact": {
+            "name": "core-plugins",
+            "version": "2.2.0",
+            "scope": "SYSTEM"
+          },
+          "properties": {
+            "convert": "message:string",
+            "drop": "attributes,id,timestamp"
+          }
+        },
+        "outputSchema": [
+          {
+            "name": "etlSchemaBody",
+            "schema": "{\"type\":\"record\",\"name\":\"etlSchemaBody\",\"fields\":[{\"name\":\"message\",\"type\":\"string\"}]}"
+          }
+        ],
+        "inputSchema": [
+          {
+            "name": "Google Cloud PubSub",
+            "schema": "{\"name\":\"etlSchemaBody\",\"type\":\"record\",\"fields\":[{\"name\":\"message\",\"type\":\"bytes\"},{\"name\":\"id\",\"type\":\"string\"},{\"name\":\"timestamp\",\"type\":{\"logicalType\":\"timestamp-micros\",\"type\":\"long\"}},{\"name\":\"attributes\",\"type\":{\"keys\":\"string\",\"values\":\"string\",\"type\":\"map\"}}]}"
+          }
+        ],
+        "type": "transform",
+        "label": "Projection",
+        "icon": "icon-projection",
+        "$$hashKey": "object:35",
+        "_uiPosition": {
+          "left": "590px",
+          "top": "316px"
+        }
+      },
+      {
+        "name": "Wrangler",
+        "plugin": {
+          "name": "Wrangler",
+          "type": "transform",
+          "label": "Wrangler",
+          "artifact": {
+            "name": "wrangler-transform",
+            "version": "4.0.0",
+            "scope": "SYSTEM"
+          },
+          "properties": {
+            "field": "*",
+            "precondition": "false",
+            "threshold": "1",
+            "schema": "{\"type\":\"record\",\"name\":\"etlSchemaBody\",\"fields\":[{\"name\":\"state\",\"type\":\"string\"},{\"name\":\"total_cases\",\"type\":\"long\"},{\"name\":\"total_deaths\",\"type\":\"long\"},{\"name\":\"active_cases\",\"type\":\"long\"}]}",
+            "directives": "parse-as-json :message 1\nrename message_cases total_cases\nrename message_deaths total_deaths\nrename message_active active_cases\nset column state message_state\nset column total_cases total_cases\nset column total_deaths total_deaths\nset column active_cases active_cases"
+          }
+        },
+        "outputSchema": [
+          {
+            "name": "etlSchemaBody",
+            "schema": "{\"type\":\"record\",\"name\":\"etlSchemaBody\",\"fields\":[{\"name\":\"state\",\"type\":\"string\"},{\"name\":\"total_cases\",\"type\":\"long\"},{\"name\":\"total_deaths\",\"type\":\"long\"},{\"name\":\"active_cases\",\"type\":\"long\"}]}"
+          }
+        ],
+        "inputSchema": [
+          {
+            "name": "Projection",
+            "schema": "{\"type\":\"record\",\"name\":\"etlSchemaBody\",\"fields\":[{\"name\":\"message\",\"type\":\"string\"}]}"
+          }
+        ],
+        "type": "transform",
+        "label": "Wrangler",
+        "icon": "icon-DataPreparation",
+        "$$hashKey": "object:36",
+        "_uiPosition": {
+          "left": "890px",
+          "top": "316px"
+        }
+      },
+      {
+        "name": "BigQuery",
+        "plugin": {
+          "name": "BigQueryTable",
+          "type": "batchsink",
+          "label": "BigQuery",
+          "artifact": {
+            "name": "google-cloud",
+            "version": "0.12.2",
+            "scope": "SYSTEM"
+          },
+          "properties": {
+            "project": "auto-detect",
+            "allowSchemaRelaxation": "false",
+            "serviceFilePath": "auto-detect",
+            "schema": "{\"type\":\"record\",\"name\":\"etlSchemaBody\",\"fields\":[{\"name\":\"state\",\"type\":\"string\"},{\"name\":\"total_cases\",\"type\":\"long\"},{\"name\":\"total_deaths\",\"type\":\"long\"},{\"name\":\"active_cases\",\"type\":\"long\"}]}",
+            "referenceName": "BigQueryTable",
+            "table": "pub_sub_table",
+            "dataset": "ajaydataset"
+          }
+        },
+        "outputSchema": [
+          {
+            "name": "etlSchemaBody",
+            "schema": "{\"type\":\"record\",\"name\":\"etlSchemaBody\",\"fields\":[{\"name\":\"state\",\"type\":\"string\"},{\"name\":\"total_cases\",\"type\":\"long\"},{\"name\":\"total_deaths\",\"type\":\"long\"},{\"name\":\"active_cases\",\"type\":\"long\"}]}"
+          }
+        ],
+        "inputSchema": [
+          {
+            "name": "Wrangler",
+            "schema": "{\"type\":\"record\",\"name\":\"etlSchemaBody\",\"fields\":[{\"name\":\"state\",\"type\":\"string\"},{\"name\":\"total_cases\",\"type\":\"long\"},{\"name\":\"total_deaths\",\"type\":\"long\"},{\"name\":\"active_cases\",\"type\":\"long\"}]}"
+          }
+        ],
+        "type": "batchsink",
+        "label": "BigQuery",
+        "icon": "fa-plug",
+        "$$hashKey": "object:37",
+        "_uiPosition": {
+          "left": "1190px",
+          "top": "316px"
+        }
+      }
+    ],
+    "batchInterval": "10s",
+    "clientResources": {
+      "memoryMB": 2048,
+      "virtualCores": 1
+    },
+    "disableCheckpoints": false,
+    "checkpointDir": "",
+    "stopGracefully": true,
+    "description": "Data Streams Application"
+  }
+}
